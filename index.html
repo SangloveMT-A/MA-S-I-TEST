@@ -3,13 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ma Sói Online - DEMO TEST</title>
+    <title>Ma Sói Online - Có Cupid & Tích hợp Firebase</title>
+    
+    <!-- Thư viện Firebase -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    
     <style>
         * { box-sizing: border-box; }
-        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: #090d16; color: #f8fafc; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 15px; transition: background 0.6s; }
-        body.day-mode { background: #0f172a; }
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: #090d16; color: #f8fafc; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 15px; }
         .container { width: 100%; max-width: 940px; display: flex; flex-direction: column; gap: 14px; }
         .lobby-card { background: rgba(15, 23, 42, 0.92); border: 2px solid #475569; border-radius: 16px; padding: 25px; max-width: 500px; margin: 30px auto; text-align: center; }
         .lobby-card h1 { margin-top: 0; color: #facc15; font-size: 28px; }
@@ -42,6 +44,7 @@
     </style>
 </head>
 <body>
+    <!-- MÀN HÌNH CHỜ (LOBBY) -->
     <div id="lobby-screen" class="lobby-card">
         <h1>🐺 MA SÓI ONLINE</h1>
         <div class="form-group">
@@ -63,73 +66,121 @@
         <div id="lobby-status" style="margin-top:12px; color:#facc15; font-size:14px;"></div>
     </div>
 
+    <!-- MÀN HÌNH GAME -->
     <div id="game-screen" class="container" style="display:none;">
         <div class="top-bar">
             <div style="background:#facc15; color:#000; padding:5px 12px; border-radius:8px; font-weight:bold;">🔑 Mã: <span id="display-room-code"></span></div>
             <div class="phase-badge" id="phase-display">⏳ SẢNH CHỜ</div>
             <div id="my-role-display" style="font-weight:bold; color:#38bdf8;">Vai trò: Chưa bắt đầu</div>
         </div>
+        
         <div class="players-grid" id="players-grid"></div>
+        
         <div class="action-panel">
             <div id="action-prompt">Đang chờ chủ phòng bắt đầu...</div>
             <div id="action-buttons"></div>
         </div>
+        
         <div class="chat-box" id="chat-box"></div>
+        
         <div class="chat-input-row">
             <input type="text" id="chat-input" placeholder="Nhập tin nhắn..." onkeydown="if(event.key==='Enter') sendChat()">
             <button class="btn btn-primary" onclick="sendChat()">Gửi</button>
         </div>
     </div>
 
+    <!-- MÃ NGUỒN LOGIC GAME (JAVASCRIPT) -->
     <script>
-        const PREFIX = "masoi-vn-room-";
+        // ==========================================
+        // 1. CẤU HÌNH FIREBASE CỦA BẠN (DÁN VÀO ĐÂY)
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "DÁN_API_KEY_CỦA_BẠN_VÀO_ĐÂY",
+            authDomain: "ghep-ma-soi.firebaseapp.com",
+            databaseURL: "https://ghep-ma-soi-default-rtdb.firebaseio.com",
+            projectId: "ghep-ma-soi",
+            storageBucket: "ghep-ma-soi.firebasestorage.app",
+            messagingSenderId: "1234567890",
+            appId: "1:1234567890:web:abcdef"
+        };
+        
+        // Khởi động Firebase
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.database();
+
+        // ==========================================
+        // 2. BIẾN TOÀN CỤC & TRẠNG THÁI GAME
+        // ==========================================
         const AVATARS = ["😎", "👩", "👨", "👧", "🦊", "🐼"];
-        const peerConfig = { config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] } };
-
-        let peer = null, isHost = false, roomCode = "", myId = "", myName = "", connections = {}, hostConn = null;
+        let isHost = false, roomCode = "", myId = "", myName = "";
         let state = { maxPlayers: 8, phase: 'LOBBY', dayCount: 1, players: [], lovers: [], hunterId: null };
-        let selectedTargets = []; // Mảng chứa các mục tiêu được chọn (Cupid cần chọn 2)
+        let selectedTargets = [];
 
+        // ==========================================
+        // 3. HỆ THỐNG KẾT NỐI (LOBBY)
+        // ==========================================
         function createRoom() {
             myName = document.getElementById('player-name-input').value.trim();
-            if (!myName) return alert("Nhập tên trước!");
-            isHost = true; roomCode = Math.floor(1000 + Math.random() * 9000).toString();
-            state.maxPlayers = parseInt(document.getElementById('max-players-select').value);
-            document.getElementById('lobby-status').innerText = "Đang tạo phòng...";
+            if (!myName) return alert("Vui lòng nhập tên của bạn!");
             
-            peer = new Peer(PREFIX + roomCode, peerConfig);
-            peer.on('open', id => {
-                myId = id;
-                state.players.push({ id: myId, name: myName, avatar: AVATARS[0], isAI: false, role: null, alive: true, votes: 0 });
-                enterGame(); addLog(`👑 Mã phòng của bạn là <b>${roomCode}</b>.`, 'system'); broadcast();
-            });
-            peer.on('connection', conn => {
-                conn.on('data', data => handleData(conn.peer, data));
-                connections[conn.peer] = conn;
+            isHost = true; 
+            roomCode = Math.floor(1000 + Math.random() * 9000).toString();
+            state.maxPlayers = parseInt(document.getElementById('max-players-select').value);
+            myId = "HOST_" + Math.random().toString(36).substr(2, 9);
+            
+            document.getElementById('lobby-status').innerText = "Đang tạo phòng trên Database...";
+
+            state.players = [{ id: myId, name: myName, avatar: AVATARS[0], isAI: false, role: null, alive: true, votes: 0 }];
+            
+            const roomRef = db.ref('rooms/' + roomCode);
+            roomRef.set({ state: state }).then(() => {
+                enterGame();
+                broadcastLog(`👑 Đã tạo phòng <b>${roomCode}</b>. Hãy gửi mã này cho bạn bè!`, 'system');
+                
+                // Lắng nghe người chơi mới xin vào phòng
+                db.ref('rooms/' + roomCode + '/joinRequests').on('child_added', (snap) => {
+                    const newPlayer = snap.val();
+                    state.players.push({ id: newPlayer.id, name: newPlayer.name, avatar: AVATARS[state.players.length % AVATARS.length], isAI: false, alive: true, votes: 0 });
+                    broadcast();
+                    broadcastLog(`👋 <b>${newPlayer.name}</b> đã tham gia!`, 'system');
+                    snap.ref.remove(); // Xóa yêu cầu sau khi duyệt
+                });
+
+                // Lắng nghe hành động ban đêm từ các máy khác
+                db.ref('rooms/' + roomCode + '/actions').on('child_added', (snap) => {
+                    const action = snap.val();
+                    processAction(action.playerId, action.targets);
+                    snap.ref.remove();
+                });
+
+                roomRef.onDisconnect().remove(); // Tự xóa phòng khi Chủ thoát
+                listenToChat();
             });
         }
 
         function joinRoom() {
             myName = document.getElementById('player-name-input').value.trim();
             const code = document.getElementById('room-code-input').value.trim();
-            if (!myName || code.length !== 4) return alert("Kiểm tra lại tên và mã phòng!");
+            if (!myName || code.length !== 4) return alert("Vui lòng kiểm tra lại tên và mã phòng!");
             
-            isHost = false; roomCode = code;
-            document.getElementById('lobby-status').innerText = "Đang kết nối qua STUN Server...";
+            isHost = false; 
+            roomCode = code;
+            myId = "PLAYER_" + Math.random().toString(36).substr(2, 9);
             
-            peer = new Peer(peerConfig);
-            peer.on('open', id => {
-                myId = id;
-                hostConn = peer.connect(PREFIX + roomCode, { reliable: true });
-                const timeout = setTimeout(() => alert("❌ Lỗi mạng: Không thể kết nối đến Chủ phòng!"), 8000);
+            document.getElementById('lobby-status').innerText = "Đang kết nối vào phòng...";
+
+            db.ref('rooms/' + roomCode + '/state').once('value').then((snap) => {
+                if (!snap.exists()) {
+                    document.getElementById('lobby-status').innerText = "❌ Không tìm thấy phòng!";
+                    return alert("Mã phòng không tồn tại hoặc chủ phòng đã giải tán!");
+                }
                 
-                hostConn.on('open', () => {
-                    clearTimeout(timeout); hostConn.send({ type: 'JOIN', name: myName }); enterGame();
-                });
-                hostConn.on('data', data => {
-                    if (data.type === 'STATE') { state = data.state; render(); }
-                    else if (data.type === 'LOG') addLog(data.text, data.logType);
-                });
+                // Gửi yêu cầu xin vào phòng cho Host xử lý
+                db.ref('rooms/' + roomCode + '/joinRequests').push({ id: myId, name: myName });
+                enterGame();
+                listenToChat();
             });
         }
 
@@ -137,38 +188,71 @@
             document.getElementById('lobby-screen').style.display = 'none';
             document.getElementById('game-screen').style.display = 'flex';
             document.getElementById('display-room-code').innerText = roomCode;
+
+            // Cả Host và Client đều lắng nghe sự thay đổi của State
+            db.ref('rooms/' + roomCode + '/state').on('value', (snap) => {
+                if (snap.exists()) {
+                    state = snap.val();
+                    if (!state.players) state.players = [];
+                    if (!state.lovers) state.lovers = [];
+                    render();
+                } else if (!isHost) {
+                    alert("Chủ phòng đã thoát trò chơi!");
+                    location.reload();
+                }
+            });
         }
 
+        // ==========================================
+        // 4. HỆ THỐNG ĐỒNG BỘ & CHAT
+        // ==========================================
         function broadcast() {
-            render();
-            Object.values(connections).forEach(c => c.send({ type: 'STATE', state }));
+            if (isHost) db.ref('rooms/' + roomCode + '/state').set(state);
+        }
+
+        function broadcastLog(text, type = '') {
+            db.ref('rooms/' + roomCode + '/chat').push({ text, type });
+        }
+
+        function sendLogTo(playerId, text, type = '') {
+            if (isHost) db.ref('rooms/' + roomCode + '/privateChat/' + playerId).push({ text, type });
+        }
+
+        function listenToChat() {
+            // Lắng nghe kênh chat chung
+            db.ref('rooms/' + roomCode + '/chat').on('child_added', (snap) => {
+                const log = snap.val();
+                addLog(log.text, log.type);
+            });
+            
+            // Lắng nghe kênh chat riêng (ẩn danh cho Tiên tri, Cupid)
+            db.ref('rooms/' + roomCode + '/privateChat/' + myId).on('child_added', (snap) => {
+                const log = snap.val();
+                addLog(log.text, log.type);
+                snap.ref.remove(); // Đọc xong tự xóa để bảo mật
+            });
         }
 
         function addLog(text, type = '') {
             const box = document.getElementById('chat-box');
-            box.innerHTML += `<div class="log-item ${type ? 'log-'+type : ''}">${text}</div>`;
+            box.innerHTML += `<div class="log-item ${type ? 'log-' + type : ''}">${text}</div>`;
             box.scrollTop = box.scrollHeight;
         }
-        function broadcastLog(text, type = '') {
-            addLog(text, type);
-            Object.values(connections).forEach(c => c.send({ type: 'LOG', text, logType: type }));
-        }
-        function sendLogTo(id, text, type = '') {
-            if (id === myId) addLog(text, type);
-            else if (connections[id]) connections[id].send({ type: 'LOG', text, logType: type });
-        }
 
-        function handleData(peerId, data) {
-            if (data.type === 'JOIN') {
-                state.players.push({ id: peerId, name: data.name, avatar: AVATARS[state.players.length%AVATARS.length], isAI: false, alive: true, votes: 0 });
-                broadcastLog(`👋 <b>${data.name}</b> đã vào phòng!`, 'system'); broadcast();
+        function sendChat() {
+            const input = document.getElementById('chat-input');
+            if (input.value) {
+                broadcastLog(`💬 <b>${myName}:</b> ${input.value}`);
+                input.value = '';
             }
-            if (data.type === 'ACTION') processAction(peerId, data.targets);
         }
 
+        // ==========================================
+        // 5. HỆ THỐNG LOGIC GAME LÕI
+        // ==========================================
         function addAI() {
             while (state.players.length < state.maxPlayers) {
-                state.players.push({ id: "AI_"+Math.random(), name: "Bot "+state.players.length, avatar: "🤖", isAI: true, alive: true, votes: 0 });
+                state.players.push({ id: "AI_" + Math.random(), name: "Bot " + state.players.length, avatar: "🤖", isAI: true, alive: true, votes: 0 });
             }
             broadcast();
         }
@@ -179,15 +263,19 @@
             for(let i=0; i<wc; i++) roles.push({ id:'WOLF', name:'Ma Sói 🐺' });
             roles.push({ id:'SEER', name:'Tiên Tri 🔮' });
             roles.push({ id:'GUARD', name:'Bảo Vệ 🛡️' });
+            
+            // Nếu phòng 8 người trở lên, thêm Thợ săn & Thần tình yêu
             if (state.maxPlayers >= 8) {
                 roles.push({ id:'HUNTER', name:'Thợ Săn 🏹' });
-                roles.push({ id:'CUPID', name:'Thần Tình Yêu 💘' }); // Thêm Cupid
+                roles.push({ id:'CUPID', name:'Thần Tình Yêu 💘' });
             }
             while(roles.length < state.maxPlayers) roles.push({ id:'VILLAGER', name:'Dân Làng 🧑‍🌾' });
-            roles.sort(() => Math.random() - 0.5);
+            roles.sort(() => Math.random() - 0.5); // Xáo trộn
 
             state.players.forEach((p, i) => { p.role = roles[i]; p.alive = true; });
-            state.lovers = []; state.dayCount = 1;
+            state.lovers = []; 
+            state.dayCount = 1;
+            
             broadcastLog("🎲 VÁN CHƠI BẮT ĐẦU!", "system");
             state.players.forEach(p => {
                 if(!p.isAI) sendLogTo(p.id, `🎭 Bạn là: <b>${p.role.name}</b>.`, 'system');
@@ -197,52 +285,70 @@
 
         function startNight() {
             state.phase = 'NIGHT'; selectedTargets = [];
+            document.body.classList.add('day-mode');
+            
             state.players.forEach(p => { 
                 p.nightTargets = []; 
                 p.actionDone = p.isAI || !['WOLF','SEER','GUARD','CUPID'].includes(p.role.id);
-                // Cupid chỉ hành động đêm 1
+                // Cupid chỉ thức để bắn tên vào đêm 1, các đêm sau ngủ như dân
                 if (p.role.id === 'CUPID' && state.dayCount > 1) p.actionDone = true; 
             });
+            
             broadcastLog(`🌙 ĐÊM ${state.dayCount} buông xuống...`, 'system');
-            broadcast(); checkNightDone();
+            broadcast(); 
+            checkNightDone();
         }
 
         function submitAction(skip = false) {
             const me = state.players.find(p => p.id === myId);
-            if (state.phase === 'NIGHT' && me.role.id === 'CUPID' && state.dayCount === 1 && selectedTargets.length !== 2) {
-                return alert("Cupid phải ghép đôi chính xác 2 người!");
-            }
-            if (!skip && selectedTargets.length === 0) return alert("Chưa chọn mục tiêu!");
             
-            if (isHost) processAction(myId, skip ? [] : selectedTargets);
-            else hostConn.send({ type: 'ACTION', targets: skip ? [] : selectedTargets });
+            // Bắt lỗi Cupid chưa chọn đủ 2 người
+            if (state.phase === 'NIGHT' && me.role.id === 'CUPID' && state.dayCount === 1 && selectedTargets.length !== 2) {
+                return alert("Cupid phải chọn chính xác 2 người để ghép đôi!");
+            }
+            if (!skip && selectedTargets.length === 0) return alert("Bạn chưa chọn mục tiêu!");
+            
+            // Gửi dữ liệu hành động
+            if (isHost) {
+                processAction(myId, skip ? [] : selectedTargets);
+            } else {
+                db.ref('rooms/' + roomCode + '/actions').push({ playerId: myId, targets: skip ? [] : selectedTargets });
+            }
         }
 
         function processAction(pId, targets) {
             const p = state.players.find(x => x.id === pId);
             if (!p || !p.alive || p.actionDone) return;
-            p.nightTargets = targets; p.actionDone = true;
             
-            if (p.role.id === 'SEER') {
+            p.nightTargets = targets; 
+            p.actionDone = true;
+            
+            // Xử lý luôn Tiên Tri báo kết quả cho Client
+            if (p.role.id === 'SEER' && targets.length > 0) {
                 const target = state.players.find(x => x.id === targets[0]);
                 sendLogTo(p.id, `🔮 ${target.name} là ${target.role.id==='WOLF'?'Sói':'Dân'}!`, 'seer');
             }
-            broadcast(); checkNightDone();
+            broadcast(); 
+            checkNightDone();
         }
 
         function checkNightDone() {
-            if (isHost && !state.players.some(p => !p.actionDone)) setTimeout(resolveNight, 1500);
+            if (isHost && !state.players.some(p => !p.actionDone)) {
+                setTimeout(resolveNight, 1500);
+            }
         }
 
+        // Hàm xử lý chết chùm của Cupid
         function killPlayerCascade(playerId) {
             let p = state.players.find(x => x.id === playerId);
-            if (!p || !p.alive) return null;
+            if (!p || !p.alive) return [];
+            
             p.alive = false;
             broadcastLog(`💀 <b>${p.name}</b> đã tử vong!`, 'death');
-            
             let deads = [p];
-            // Kích hoạt chết chùm nếu là tình nhân
-            if (state.lovers.includes(p.id)) {
+            
+            // Nếu người chết nằm trong cặp đôi tình nhân
+            if (state.lovers && state.lovers.includes(p.id)) {
                 let partnerId = state.lovers.find(x => x !== p.id);
                 let partner = state.players.find(x => x.id === partnerId);
                 if (partner && partner.alive) {
@@ -251,52 +357,66 @@
                     deads.push(partner);
                 }
             }
-            return deads; // Trả về danh sách người vừa chết để check Thợ Săn
+            return deads; 
         }
 
         function resolveNight() {
+            // 1. Chốt danh sách tình nhân của Cupid Đêm 1
             if (state.dayCount === 1) {
                 const cupid = state.players.find(p => p.role.id === 'CUPID');
-                if (cupid && !cupid.isAI && cupid.nightTargets.length === 2) {
+                if (cupid && !cupid.isAI && cupid.nightTargets && cupid.nightTargets.length === 2) {
                     state.lovers = cupid.nightTargets;
                     state.lovers.forEach(id => {
                         const partner = state.players.find(x => x.id === state.lovers.find(y => y !== id));
-                        sendLogTo(id, `💘 <b>CUPID ĐÃ BẮN TÊN!</b> Bạn bị ghép đôi với <b>${partner.name}</b> (${partner.role.name}). Sống cùng sống, chết cùng chết!`, 'log-cupid');
+                        sendLogTo(id, `💘 <b>CUPID ĐÃ BẮN TÊN!</b> Bạn bị ghép đôi với <b>${partner.name}</b>. Sống cùng sống, chết cùng chết!`, 'cupid');
                     });
                 }
             }
 
+            // 2. Tính toán Sói và Bảo vệ
             const guard = state.players.find(p => p.role.id === 'GUARD' && p.alive);
-            const guardTarget = guard ? guard.nightTargets[0] : null;
+            const guardTarget = (guard && guard.nightTargets) ? guard.nightTargets[0] : null;
 
             const wolves = state.players.filter(p => p.role.id === 'WOLF' && p.alive);
-            let wolfTarget = wolves.length ? wolves[0].nightTargets[0] : null;
+            let wolfTarget = (wolves.length && wolves[0].nightTargets) ? wolves[0].nightTargets[0] : null;
 
             broadcastLog(`☀️ TRỜI SÁNG NGÀY ${state.dayCount}!`, 'system');
+            document.body.classList.remove('day-mode');
             
             let huntersToTrigger = [];
+            
+            // 3. Phán xét sinh tử
             if (wolfTarget && wolfTarget !== guardTarget) {
                 let deads = killPlayerCascade(wolfTarget);
                 deads.forEach(d => { if (d.role.id === 'HUNTER') huntersToTrigger.push(d); });
             } else {
-                broadcastLog(`🛡️ Đêm qua bình yên.`, 'system');
+                broadcastLog(`🛡️ Đêm qua bình yên, không ai chết.`, 'system');
             }
 
-            if (huntersToTrigger.length > 0) triggerHunter(huntersToTrigger[0]);
-            else checkWinOrDiscuss();
+            // 4. Nếu Thợ Săn chết, cho Thợ Săn kéo theo 1 người
+            if (huntersToTrigger.length > 0) {
+                triggerHunter(huntersToTrigger[0]);
+            } else {
+                checkWinOrDiscuss();
+            }
         }
 
         function triggerHunter(hunter) {
-            state.phase = 'HUNTER'; state.hunterId = hunter.id; selectedTargets = [];
+            state.phase = 'HUNTER'; 
+            state.hunterId = hunter.id; 
+            selectedTargets = [];
             broadcastLog(`🏹 Thợ săn <b>${hunter.name}</b> đang hấp hối, chuẩn bị kéo theo 1 người...`, 'death');
-            if(hunter.isAI) { setTimeout(checkWinOrDiscuss, 2000); } // Đơn giản hóa AI thợ săn
-            else broadcast();
+            
+            if(hunter.isAI) { 
+                setTimeout(checkWinOrDiscuss, 2000); 
+            } else {
+                broadcast();
+            }
         }
 
         function resolveHunter() {
             if(selectedTargets.length > 0) {
-                let deads = killPlayerCascade(selectedTargets[0]);
-                // Nếu người bị bắn chùm chết tiếp là 1 thợ săn khác thì ngắt mạch tránh vô tận cho bản web
+                killPlayerCascade(selectedTargets[0]);
             }
             checkWinOrDiscuss();
         }
@@ -304,22 +424,39 @@
         function checkWinOrDiscuss() {
             const w = state.players.filter(p=>p.alive && p.role.id==='WOLF').length;
             const v = state.players.filter(p=>p.alive && p.role.id!=='WOLF').length;
-            if (w === 0) { state.phase='END'; broadcastLog("🎉 DÂN LÀNG THẮNG!"); }
-            else if (w >= v) { state.phase='END'; broadcastLog("🐺 MA SÓI THẮNG!"); }
-            else { state.phase='DAY'; selectedTargets=[]; }
+            
+            if (w === 0) { 
+                state.phase='END'; broadcastLog("🎉 PHE DÂN LÀNG CHIẾN THẮNG!"); 
+            } else if (w >= v) { 
+                state.phase='END'; broadcastLog("🐺 PHE MA SÓI CHIẾN THẮNG!"); 
+            } else { 
+                state.phase='DAY'; selectedTargets=[]; 
+            }
             broadcast();
         }
 
+        // ==========================================
+        // 6. HỆ THỐNG GIAO DIỆN (RENDER)
+        // ==========================================
         function render() {
             const me = state.players.find(p => p.id === myId);
             if (!me) return;
+            
+            document.getElementById('phase-display').innerText = 
+                state.phase === 'LOBBY' ? '⏳ SẢNH CHỜ' : 
+                state.phase === 'NIGHT' ? '🌙 BAN ĐÊM' : 
+                state.phase === 'DAY' ? '☀️ BAN NGÀY' : 
+                state.phase === 'VOTE' ? '🗳️ BỎ PHIẾU' : '🏁 KẾT THÚC';
+                
             document.getElementById('my-role-display').innerText = me.role ? `Vai: ${me.role.name}` : '';
             
             const grid = document.getElementById('players-grid');
             grid.innerHTML = '';
+            
             state.players.forEach(p => {
                 const card = document.createElement('div');
                 const isLover = state.lovers.includes(myId) && state.lovers.includes(p.id);
+                
                 card.className = `player-card ${p.alive?'':'dead'} ${selectedTargets.includes(p.id)?'selected':''}`;
                 card.innerHTML = `<div class="avatar">${p.alive?p.avatar:'🪦'}</div>
                                   <div class="p-name">${p.name} ${isLover?'💘':''}</div>
@@ -327,12 +464,16 @@
                 
                 if (p.alive && state.phase !== 'END') {
                     card.onclick = () => {
-                        // Cupid đêm 1 chọn 2 người
-                        if(state.phase === 'NIGHT' && me.role.id === 'CUPID' && state.dayCount === 1) {
-                            if(selectedTargets.includes(p.id)) selectedTargets = selectedTargets.filter(x => x !== p.id);
-                            else if (selectedTargets.length < 2) selectedTargets.push(p.id);
+                        // Logic chọn mục tiêu
+                        if(state.phase === 'NIGHT' && me.role && me.role.id === 'CUPID' && state.dayCount === 1) {
+                            // Cupid chọn tối đa 2 người
+                            if(selectedTargets.includes(p.id)) {
+                                selectedTargets = selectedTargets.filter(x => x !== p.id);
+                            } else if (selectedTargets.length < 2) {
+                                selectedTargets.push(p.id);
+                            }
                         } else {
-                            // Các role khác hoặc bỏ phiếu chọn 1 người
+                            // Các vai khác chỉ chọn 1
                             selectedTargets = selectedTargets[0] === p.id ? [] : [p.id];
                         }
                         render();
@@ -347,7 +488,7 @@
             if(state.phase === 'LOBBY' && isHost) {
                 prompt.innerText = "Chủ phòng điều khiển:";
                 btns.innerHTML = `<button class="btn btn-success" onclick="startGame()">🚀 Bắt Đầu</button>
-                                  <button class="btn btn-primary" onclick="addAI()">🤖 Thêm Bot</button>`;
+                                  <button class="btn btn-primary" onclick="addAI()">🤖 Thêm Bot (Cho đủ người)</button>`;
             } else if (state.phase === 'NIGHT' && me.alive && !me.actionDone) {
                 if(me.role.id === 'CUPID') prompt.innerText = "💘 Cupid: Chọn 2 người để ghép đôi:";
                 else prompt.innerText = "🌙 Chọn 1 mục tiêu đêm nay:";
@@ -363,13 +504,9 @@
                 prompt.innerText = "🏹 Bạn sắp chết, chọn 1 người bắn kéo theo:";
                 btns.innerHTML = `<button class="btn btn-warn" onclick="resolveHunter()">Bắn!</button>`;
             } else {
-                prompt.innerText = "Đang chờ người khác..."; btns.innerHTML = "";
+                prompt.innerText = "Đang chờ người khác..."; 
+                btns.innerHTML = "";
             }
-        }
-
-        function sendChat() {
-            const input = document.getElementById('chat-input');
-            if (input.value) { broadcastLog(`💬 <b>${myName}:</b> ${input.value}`); input.value = ''; }
         }
     </script>
 </body>
