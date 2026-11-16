@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ma Sói Demo test</title>
+    <title>Ma Sói Online</title>
 
     <!-- Thư viện Firebase -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -359,7 +359,7 @@
 
 <body>
 
-    <audio id="bgm-audio" src="./Ma Sói - Nhạc Nền.mp3" loop preload="auto"></audio>
+    <audio id="bgm-audio" src="bgm.mp3" loop preload="auto"></audio>
 
     <div id="lobby-screen" class="lobby-card">
         <h1>🐺 MA SÓI ONLINE</h1>
@@ -373,13 +373,13 @@
             <select id="max-players-select">
                 <option value="5">5 Người (1 Sói, 1 Tiên, 1 Bảo Vệ, 2 Dân)</option>
                 <option value="8" selected>8 Người (2 Sói, 1 Tiên, 1 Bảo Vệ, 1 Thợ Săn, 1 Cupid, 2 Dân)</option>
-                <option value="11">11 Người (3 Sói, 1 Tiên Tri, 1 Bảo Vệ, 1 Thợ Săn, 1 Cupid, 4 Dân)</option>
-                <option value="13">13 Người (3 Sói, 1 Tiên Tri, 1 Bảo Vệ, 1 Thợ Săn, 1 Cupid, 6 Dân)</option>
-                <option value="15">15 Người (4 Sói, 1 Tiên Tri, 1 Bảo Vệ, 1 Thợ Săn, 1 Cupid, 7 Dân)</option>
-                <option value="19">19 Người (5 Sói, 1 Tiên Tri, 1 Bảo Vệ, 1 Thợ Săn, 1 Cupid, 10 Dân)</option>
+                <option value="11">11 Người (3 Sói, 1 Tiên, 1 Bảo Vệ, 1 Thợ Săn, 1 Cupid, 4 Dân)</option>
+                <option value="13">13 Người (3 Sói, 1 Tiên, 1 Bảo Vệ, 1 Thợ Săn, 1 Cupid, 6 Dân)</option>
+                <option value="15">15 Người (4 Sói, 1 Tiên, 1 Bảo Vệ, 1 Thợ Săn, 1 Cupid, 7 Dân)</option>
+                <option value="19">19 Người (5 Sói, 1 Tiên, 1 Bảo Vệ, 1 Thợ Săn, 1 Cupid, 10 Dân)</option>
             </select>
         </div>
-        <button class="btn btn-success btn-full" onclick="createRoom()">👑 Tạo Phòng Mới (Firebase)</button>
+        <button class="btn btn-success btn-full" onclick="createRoom()">👑 Tạo Phòng Mới</button>
 
         <div class="divider"><span>HOẶC VÀO PHÒNG BẠN BÈ</span></div>
         <div class="form-group">
